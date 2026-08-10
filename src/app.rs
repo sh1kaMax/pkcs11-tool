@@ -327,7 +327,7 @@ impl TokenStudioApp {
     }
 
     fn ui_login(&mut self, _ctx: &Context, ui: &mut Ui) {
-        center_card(ui, 620.0, 430.0, |ui| {
+        center_card(ui, 660.0, 460.0, |ui| {
             show_card(ui, |ui| {
                 header_row(ui, "Вход", true);
                 ui.add_space(8.0);
@@ -376,11 +376,11 @@ impl TokenStudioApp {
     fn ui_dashboard(&mut self, ctx: &Context, ui: &mut Ui) {
         let token = self.session.as_ref().map(|session| session.token.clone());
         if let Some(token) = token {
-            center_card(ui, 820.0, 650.0, |ui| {
+            center_card(ui, 880.0, 720.0, |ui| {
                 show_card(ui, |ui| {
                     header_row(ui, &token.label, false);
                     ui.add_space(8.0);
-                    ScrollArea::vertical().max_height(560.0).show(ui, |ui| {
+                    ScrollArea::vertical().max_height(630.0).show(ui, |ui| {
                         ui.horizontal(|ui| {
                             if ui.add(small_button("Домой")).clicked() {
                                 self.logout();
@@ -512,7 +512,7 @@ impl TokenStudioApp {
 
     fn draw_background(&self, ui: &mut Ui) {
         let rect = ui.max_rect();
-        ui.painter().rect_filled(rect, 0.0, Color32::TRANSPARENT);
+        ui.painter().rect_filled(rect, 0.0, Color32::WHITE);
     }
 
 }
