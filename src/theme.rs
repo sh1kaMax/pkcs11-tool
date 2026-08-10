@@ -1,18 +1,15 @@
-use egui::{
-    epaint::Hsva, Color32, Context, CornerRadius, FontDefinitions, FontFamily, FontId, Stroke, Style, TextStyle,
-    Theme, Visuals,
-};
+use egui::{Color32, Context, CornerRadius, FontDefinitions, FontFamily, FontId, Stroke, Style, TextStyle, Theme, Visuals};
 
-pub const BG_DARKEST: Color32 = Color32::from_rgb(5, 14, 18);
-pub const BG_DARK: Color32 = Color32::from_rgb(10, 24, 31);
-pub const PANEL: Color32 = Color32::from_rgb(15, 34, 41);
-pub const PANEL_ALT: Color32 = Color32::from_rgb(22, 49, 59);
-pub const TURQUOISE: Color32 = Color32::from_rgb(34, 219, 196);
-pub const TURQUOISE_SOFT: Color32 = Color32::from_rgb(123, 255, 232);
-pub const DANGER: Color32 = Color32::from_rgb(255, 97, 118);
-pub const WARNING: Color32 = Color32::from_rgb(255, 194, 92);
-pub const TEXT: Color32 = Color32::from_rgb(229, 245, 244);
-pub const TEXT_MUTED: Color32 = Color32::from_rgb(138, 175, 175);
+pub const BG_DARKEST: Color32 = Color32::from_rgb(0, 0, 0);
+pub const BG_DARK: Color32 = Color32::from_rgb(8, 8, 8);
+pub const PANEL: Color32 = Color32::from_rgba_premultiplied(18, 18, 18, 236);
+pub const PANEL_ALT: Color32 = Color32::from_rgba_premultiplied(28, 28, 28, 244);
+pub const TURQUOISE: Color32 = Color32::from_rgb(255, 255, 255);
+pub const TURQUOISE_SOFT: Color32 = Color32::from_rgba_premultiplied(255, 255, 255, 180);
+pub const DANGER: Color32 = Color32::from_rgb(255, 255, 255);
+pub const WARNING: Color32 = Color32::from_rgb(255, 255, 255);
+pub const TEXT: Color32 = Color32::from_rgb(244, 244, 244);
+pub const TEXT_MUTED: Color32 = Color32::from_rgb(160, 160, 160);
 
 pub fn install(ctx: &Context) {
     let fonts = FontDefinitions::default();
@@ -44,33 +41,24 @@ fn visuals() -> Visuals {
     visuals.panel_fill = BG_DARK;
     visuals.window_fill = BG_DARK;
     visuals.widgets.noninteractive.bg_fill = PANEL;
-    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, Color32::from_rgba_premultiplied(34, 219, 196, 32));
+    visuals.widgets.noninteractive.bg_stroke = Stroke::new(1.0, Color32::from_rgba_premultiplied(255, 255, 255, 28));
     visuals.widgets.noninteractive.corner_radius = CornerRadius::same(18);
     visuals.widgets.inactive.bg_fill = PANEL;
     visuals.widgets.inactive.fg_stroke = Stroke::new(1.0, TEXT);
     visuals.widgets.inactive.corner_radius = CornerRadius::same(18);
     visuals.widgets.hovered.bg_fill = PANEL_ALT;
-    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, TURQUOISE);
+    visuals.widgets.hovered.bg_stroke = Stroke::new(1.0, Color32::from_rgba_premultiplied(255, 255, 255, 120));
     visuals.widgets.hovered.fg_stroke = Stroke::new(1.0, TEXT);
     visuals.widgets.hovered.corner_radius = CornerRadius::same(18);
-    visuals.widgets.active.bg_fill = tint(TURQUOISE, 0.25);
-    visuals.widgets.active.bg_stroke = Stroke::new(1.0, TURQUOISE_SOFT);
+    visuals.widgets.active.bg_fill = Color32::from_rgba_premultiplied(255, 255, 255, 210);
+    visuals.widgets.active.fg_stroke = Stroke::new(1.0, BG_DARKEST);
+    visuals.widgets.active.bg_stroke = Stroke::new(1.0, Color32::from_rgba_premultiplied(255, 255, 255, 220));
     visuals.widgets.active.corner_radius = CornerRadius::same(18);
-    visuals.selection.bg_fill = tint(TURQUOISE, 0.35);
-    visuals.selection.stroke = Stroke::new(1.0, TURQUOISE_SOFT);
-    visuals.hyperlink_color = TURQUOISE_SOFT;
+    visuals.selection.bg_fill = Color32::from_rgba_premultiplied(255, 255, 255, 120);
+    visuals.selection.stroke = Stroke::new(1.0, Color32::from_rgba_premultiplied(255, 255, 255, 180));
+    visuals.hyperlink_color = TEXT;
     visuals.faint_bg_color = PANEL;
     visuals.code_bg_color = PANEL_ALT;
-    visuals.window_shadow.color = Color32::from_black_alpha(90);
+    visuals.window_shadow.color = Color32::from_black_alpha(0);
     visuals
-}
-
-fn tint(color: Color32, value_mult: f32) -> Color32 {
-    let hsva = Hsva::from(color);
-    Color32::from(Hsva {
-        v: (hsva.v * (1.0 + value_mult)).min(1.0),
-        s: hsva.s,
-        h: hsva.h,
-        a: hsva.a,
-    })
 }

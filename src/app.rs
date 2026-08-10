@@ -6,7 +6,7 @@ use std::{
 use chrono::Local;
 use eframe::egui::{
     self, Align, Align2, Area, Button, CollapsingHeader, Color32, Context, CornerRadius, Frame, Id, Layout, Margin,
-    RichText, ScrollArea, Sense, Stroke, TextEdit, Ui, Vec2,
+    RichText, ScrollArea, Stroke, TextEdit, Ui, Vec2,
 };
 use rfd::FileDialog;
 
@@ -35,14 +35,6 @@ impl CommandTab {
         }
     }
 
-    fn description(self) -> &'static str {
-        match self {
-            Self::Format => "Быстрая очистка пользовательских объектов на токене.",
-            Self::ChangePin => "Обновление пользовательского PIN-кода без выхода из рабочей сессии.",
-            Self::Write => "Запись файла на токен как защищенного PKCS#11 DATA-объекта.",
-            Self::Read => "Просмотр содержимого токена и выгрузка выбранного объекта в файл.",
-        }
-    }
 }
 
 #[derive(Clone, Copy)]
@@ -136,6 +128,7 @@ impl TokenStudioApp {
     }
 
     fn refresh_tokens(&mut self) {
+        self.close_service();
         self.loading = true;
         match Pkcs11Service::new(self.login_form.module_path.clone())
             .and_then(|service| service.list_tokens().map(|tokens| (service, tokens)))
@@ -205,6 +198,14 @@ impl TokenStudioApp {
             selected_index: None,
             target_path: String::new(),
         };
+        self.close_service();
+        self.refresh_tokens();
+    }
+
+    fn close_service(&mut self) {
+        if let Some(service) = self.service.take() {
+            service.shutdown();
+        }
     }
 
     fn format_token(&mut self) {
@@ -345,28 +346,24 @@ impl TokenStudioApp {
             body: body.to_owned(),
             kind,
             created_at: Instant::now(),
-            ttl: Duration::from_secs(6),
+            ttl: Duration::from_secs(4),
         });
         self.next_toast_id += 1;
     }
 
     fn ui_login(&mut self, _ctx: &Context, ui: &mut Ui) {
-        ui.add_space(40.0);
-        ui.horizontal(|ui| {
-            let side = ((ui.available_width() - 420.0) * 0.5).max(0.0);
-            ui.add_space(side);
-            ui.vertical(|ui| {
-                ui.set_width(420.0);
-                show_card(ui, |ui| {
-                    ui.label(RichText::new("Вход").text_style(egui::TextStyle::Heading));
-                    ui.add_space(12.0);
+        center_card(ui, 420.0, |ui| {
+            show_card(ui, |ui| {
+                ui.label(RichText::new("Вход").text_style(egui::TextStyle::Heading));
+                ui.add_space(12.0);
 
-                    CollapsingHeader::new(format!("Подключенные токены ({})", self.tokens.len()))
-                        .default_open(true)
-                        .show(ui, |ui| {
-                            if self.tokens.is_empty() {
-                                ui.label(RichText::new("Нет токенов").color(theme::WARNING));
-                            } else {
+                CollapsingHeader::new(format!("Токены ({})", self.tokens.len()))
+                    .default_open(true)
+                    .show(ui, |ui| {
+                        if self.tokens.is_empty() {
+                            ui.label(RichText::new("Нет токенов").color(theme::WARNING));
+                        } else {
+                            ScrollArea::vertical().max_height(170.0).show(ui, |ui| {
                                 for (index, token) in self.tokens.iter().enumerate() {
                                     let label = format!("{}  {}", token.label, token.serial);
                                     if ui
@@ -376,25 +373,23 @@ impl TokenStudioApp {
                                         self.login_form.selected_index = index;
                                     }
                                 }
-                            }
-                        });
-
-                    ui.add_space(10.0);
-                    ui.add(TextEdit::singleline(&mut self.login_form.pin).password(true).hint_text("PIN"));
-                    ui.add_space(10.0);
-                    ui.add(TextEdit::singleline(&mut self.login_form.module_path).hint_text("PKCS#11 модуль"));
-                    ui.add_space(10.0);
-                    ui.horizontal(|ui| {
-                        if ui.add(accent_button("Войти")).clicked() {
-                            self.login();
-                        }
-                        if ui.add(outline_button("Обновить")).clicked() && !self.loading {
-                            self.refresh_tokens();
+                            });
                         }
                     });
-                    ui.add_space(6.0);
-                    ui.label(RichText::new(&self.last_refresh_label).color(theme::TEXT_MUTED));
+
+                ui.add_space(10.0);
+                ui.add(TextEdit::singleline(&mut self.login_form.pin).password(true).hint_text("PIN"));
+                ui.add_space(10.0);
+                ui.horizontal(|ui| {
+                    if ui.add(accent_button("Войти")).clicked() {
+                        self.login();
+                    }
+                    if ui.add(outline_button("Обновить")).clicked() && !self.loading {
+                        self.refresh_tokens();
+                    }
                 });
+                ui.add_space(6.0);
+                ui.label(RichText::new(&self.last_refresh_label).color(theme::TEXT_MUTED));
             });
         });
     }
@@ -402,42 +397,42 @@ impl TokenStudioApp {
     fn ui_dashboard(&mut self, ctx: &Context, ui: &mut Ui) {
         let token = self.session.as_ref().map(|session| session.token.clone());
         if let Some(token) = token {
-            show_card(ui, |ui| {
-                ui.horizontal(|ui| {
-                    if ui.add(small_button("Домой")).clicked() {
-                        self.logout();
-                    }
-                    ui.label(RichText::new(&token.label).strong());
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        if ui.add(outline_button("Обновить")).clicked() {
-                            self.read_objects();
+            center_card(ui, 540.0, |ui| {
+                show_card(ui, |ui| {
+                    ScrollArea::vertical().max_height(420.0).show(ui, |ui| {
+                        ui.horizontal(|ui| {
+                            if ui.add(small_button("Домой")).clicked() {
+                                self.logout();
+                            }
+                            ui.label(RichText::new(&token.label).strong());
+                            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                                if ui.add(outline_button("Обновить")).clicked() {
+                                    self.read_objects();
+                                }
+                            });
+                        });
+                        ui.add_space(10.0);
+                        CollapsingHeader::new("Команды")
+                            .default_open(true)
+                            .show(ui, |ui| {
+                                for tab in CommandTab::ALL {
+                                    if ui.add(list_button(self.active_tab == tab, tab.title())).clicked() {
+                                        self.active_tab = tab;
+                                        if self.active_tab == CommandTab::Read {
+                                            self.read_objects();
+                                        }
+                                    }
+                                }
+                            });
+                        ui.add_space(12.0);
+                        match self.active_tab {
+                            CommandTab::Format => self.ui_format(ui),
+                            CommandTab::ChangePin => self.ui_change_pin(ui),
+                            CommandTab::Write => self.ui_write(ui),
+                            CommandTab::Read => self.ui_read(ui),
                         }
                     });
                 });
-            });
-
-            ui.add_space(12.0);
-            show_card(ui, |ui| {
-                CollapsingHeader::new("Команды")
-                    .default_open(true)
-                    .show(ui, |ui| {
-                        for tab in CommandTab::ALL {
-                            if ui.add(list_button(self.active_tab == tab, tab.title())).clicked() {
-                                self.active_tab = tab;
-                                if self.active_tab == CommandTab::Read {
-                                    self.read_objects();
-                                }
-                            }
-                        }
-                    });
-
-                ui.add_space(14.0);
-                match self.active_tab {
-                    CommandTab::Format => self.ui_format(ui),
-                    CommandTab::ChangePin => self.ui_change_pin(ui),
-                    CommandTab::Write => self.ui_write(ui),
-                    CommandTab::Read => self.ui_read(ui),
-                }
             });
         }
 
@@ -521,13 +516,7 @@ impl TokenStudioApp {
 
     fn draw_background(&self, ui: &mut Ui) {
         let rect = ui.max_rect();
-        let painter = ui.painter();
-        painter.rect_filled(rect, 0.0, theme::BG_DARKEST);
-
-        let top = rect.left_top() + egui::vec2(180.0, 120.0);
-        let bottom = rect.right_bottom() - egui::vec2(220.0, 140.0);
-        painter.circle_filled(top, 220.0, Color32::from_rgba_premultiplied(34, 219, 196, 18));
-        painter.circle_filled(bottom, 280.0, Color32::from_rgba_premultiplied(13, 91, 112, 26));
+        ui.painter().rect_filled(rect, 0.0, theme::BG_DARKEST);
     }
 
     fn draw_toasts(&mut self, ctx: &Context) {
@@ -544,27 +533,25 @@ impl TokenStudioApp {
             .clamp(0.0, 1.0);
 
             let color = match toast.kind {
-                ToastKind::Success => theme::TURQUOISE,
-                ToastKind::Error => theme::DANGER,
-                ToastKind::Info => theme::WARNING,
+                ToastKind::Success => theme::TEXT,
+                ToastKind::Error => theme::TEXT,
+                ToastKind::Info => theme::TEXT_MUTED,
             };
 
             Area::new(Id::new(("toast", toast.id)))
-                .anchor(Align2::RIGHT_TOP, egui::vec2(-22.0, 22.0 + index as f32 * 92.0))
+                .anchor(Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -16.0 - index as f32 * 62.0))
                 .show(ctx, |ui| {
                     Frame::new()
-                        .fill(Color32::from_rgba_premultiplied(15, 34, 41, (230.0 * alpha) as u8))
-                        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(color.r(), color.g(), color.b(), (255.0 * alpha) as u8)))
-                        .corner_radius(CornerRadius::same(18))
-                        .inner_margin(Margin::same(14))
+                        .fill(Color32::from_rgba_premultiplied(18, 18, 18, (220.0 * alpha) as u8))
+                        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(color.r(), color.g(), color.b(), (100.0 * alpha) as u8)))
+                        .corner_radius(CornerRadius::same(12))
+                        .inner_margin(Margin::same(10))
                         .show(ui, |ui| {
-                            ui.set_width(320.0);
+                            ui.set_width(220.0);
                             ui.horizontal(|ui| {
-                                let (rect, _) = ui.allocate_exact_size(Vec2::new(12.0, 12.0), Sense::hover());
-                                ui.painter().circle_filled(rect.center(), 5.0, Color32::from_rgba_premultiplied(color.r(), color.g(), color.b(), (255.0 * alpha) as u8));
                                 ui.vertical(|ui| {
-                                    ui.label(RichText::new(&toast.title).strong());
-                                    ui.label(RichText::new(&toast.body).color(theme::TEXT_MUTED));
+                                    ui.label(RichText::new(&toast.title).strong().size(13.0));
+                                    ui.label(RichText::new(&toast.body).color(theme::TEXT_MUTED).size(11.0));
                                 });
                             });
                         });
@@ -600,11 +587,24 @@ fn show_card<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
             theme::PANEL.b(),
             242,
         ))
-        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(34, 219, 196, 34)))
-        .corner_radius(CornerRadius::same(24))
-        .inner_margin(Margin::same(20))
+        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(255, 255, 255, 28)))
+        .corner_radius(CornerRadius::same(16))
+        .inner_margin(Margin::same(16))
         .show(ui, add_contents)
         .inner
+}
+
+fn center_card<R>(ui: &mut Ui, width: f32, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
+    ui.horizontal(|ui| {
+        let side = ((ui.available_width() - width) * 0.5).max(0.0);
+        ui.add_space(side);
+        ui.vertical(|ui| {
+            ui.set_width(width);
+            add_contents(ui)
+        })
+        .inner
+    })
+    .inner
 }
 
 fn list_button(text_selected: bool, text: &str) -> Button<'_> {
@@ -614,33 +614,33 @@ fn list_button(text_selected: bool, text: &str) -> Button<'_> {
             .strong(),
     )
     .fill(if text_selected { theme::TURQUOISE } else { theme::PANEL })
-    .stroke(Stroke::new(1.0, theme::TURQUOISE))
-    .corner_radius(CornerRadius::same(14))
-    .min_size(Vec2::new(0.0, 38.0))
+    .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(255, 255, 255, 32)))
+    .corner_radius(CornerRadius::same(12))
+    .min_size(Vec2::new(0.0, 34.0))
 }
 
 fn accent_button(text: &str) -> Button<'_> {
     Button::new(RichText::new(text).strong().color(theme::BG_DARKEST))
         .fill(theme::TURQUOISE)
-        .stroke(Stroke::new(1.0, theme::TURQUOISE_SOFT))
-        .corner_radius(CornerRadius::same(18))
-        .min_size(Vec2::new(0.0, 44.0))
+        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(255, 255, 255, 50)))
+        .corner_radius(CornerRadius::same(14))
+        .min_size(Vec2::new(0.0, 38.0))
 }
 
 fn outline_button(text: &str) -> Button<'_> {
     Button::new(RichText::new(text).color(theme::TEXT))
         .fill(theme::PANEL)
-        .stroke(Stroke::new(1.0, theme::TURQUOISE))
-        .corner_radius(CornerRadius::same(18))
-        .min_size(Vec2::new(0.0, 44.0))
+        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(255, 255, 255, 48)))
+        .corner_radius(CornerRadius::same(14))
+        .min_size(Vec2::new(0.0, 38.0))
 }
 
 fn small_button(text: &str) -> Button<'_> {
     Button::new(RichText::new(text).color(theme::TEXT))
         .fill(theme::PANEL)
-        .stroke(Stroke::new(1.0, theme::TURQUOISE))
+        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(255, 255, 255, 48)))
         .corner_radius(CornerRadius::same(12))
-        .min_size(Vec2::new(72.0, 32.0))
+        .min_size(Vec2::new(64.0, 30.0))
 }
 
 impl Drop for TokenStudioApp {
@@ -648,5 +648,6 @@ impl Drop for TokenStudioApp {
         if let Some(session) = self.session.take() {
             session.logout();
         }
+        self.close_service();
     }
 }

@@ -84,6 +84,10 @@ impl Pkcs11Service {
         )?;
         Ok(TokenSession { token, session })
     }
+
+    pub fn shutdown(self) {
+        let _ = self.context.finalize();
+    }
 }
 
 impl TokenSession {
@@ -205,15 +209,31 @@ impl Drop for TokenSession {
 
 pub fn default_module_path() -> String {
     #[cfg(target_os = "windows")]
+    let local_names = ["rtpkcs11ecp.dll"];
+    #[cfg(not(target_os = "windows"))]
+    let local_names = ["librtpkcs11ecp.so", "rtpkcs11ecp.so"];
+
+    if let Ok(exe_path) = std::env::current_exe() {
+        if let Some(parent) = exe_path.parent() {
+            for local_name in local_names {
+                let candidate = parent.join(local_name);
+                if candidate.exists() {
+                    return candidate.display().to_string();
+                }
+            }
+        }
+    }
+
+    #[cfg(target_os = "windows")]
     {
         let candidates = [
             r"C:\Windows\System32\rtpkcs11ecp.dll",
             r"C:\Program Files\Aktiv Co\Rutoken PKCS11\rtpkcs11ecp.dll",
         ];
-        return first_existing(candidates.iter().map(PathBuf::from))
+        first_existing(candidates.iter().map(PathBuf::from))
             .unwrap_or_else(|| PathBuf::from(candidates[0]))
             .display()
-            .to_string();
+            .to_string()
     }
 
     #[cfg(not(target_os = "windows"))]
