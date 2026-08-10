@@ -7,9 +7,11 @@ use app::TokenStudioApp;
 fn main() -> eframe::Result<()> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([760.0, 520.0])
-            .with_min_inner_size([640.0, 460.0])
+            .with_inner_size([860.0, 720.0])
+            .with_min_inner_size([820.0, 680.0])
             .with_resizable(false)
+            .with_decorations(false)
+            .with_transparent(true)
             .with_title("PKCS11 Token Studio"),
         ..Default::default()
     };

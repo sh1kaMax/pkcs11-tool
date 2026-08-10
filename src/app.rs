@@ -163,7 +163,7 @@ impl TokenStudioApp {
             return;
         }
 
-        match service.login(token.clone(), self.login_form.pin.trim()) {
+        match service.login(token.clone(), &self.login_form.pin) {
             Ok(session) => {
                 self.session = Some(session);
                 self.change_pin_form.old_pin = self.login_form.pin.clone();
@@ -352,10 +352,10 @@ impl TokenStudioApp {
     }
 
     fn ui_login(&mut self, _ctx: &Context, ui: &mut Ui) {
-        center_card(ui, 420.0, |ui| {
+        center_card(ui, 560.0, |ui| {
             show_card(ui, |ui| {
-                ui.label(RichText::new("Вход").text_style(egui::TextStyle::Heading));
-                ui.add_space(12.0);
+                header_row(ui, "Вход", true);
+                ui.add_space(8.0);
 
                 CollapsingHeader::new(format!("Токены ({})", self.tokens.len()))
                     .default_open(true)
@@ -363,7 +363,7 @@ impl TokenStudioApp {
                         if self.tokens.is_empty() {
                             ui.label(RichText::new("Нет токенов").color(theme::WARNING));
                         } else {
-                            ScrollArea::vertical().max_height(170.0).show(ui, |ui| {
+                            ScrollArea::vertical().max_height(220.0).show(ui, |ui| {
                                 for (index, token) in self.tokens.iter().enumerate() {
                                     let label = format!("{}  {}", token.label, token.serial);
                                     if ui
@@ -377,9 +377,9 @@ impl TokenStudioApp {
                         }
                     });
 
-                ui.add_space(10.0);
+                ui.add_space(14.0);
                 ui.add(TextEdit::singleline(&mut self.login_form.pin).password(true).hint_text("PIN"));
-                ui.add_space(10.0);
+                ui.add_space(14.0);
                 ui.horizontal(|ui| {
                     if ui.add(accent_button("Войти")).clicked() {
                         self.login();
@@ -388,7 +388,7 @@ impl TokenStudioApp {
                         self.refresh_tokens();
                     }
                 });
-                ui.add_space(6.0);
+                ui.add_space(8.0);
                 ui.label(RichText::new(&self.last_refresh_label).color(theme::TEXT_MUTED));
             });
         });
@@ -397,14 +397,15 @@ impl TokenStudioApp {
     fn ui_dashboard(&mut self, ctx: &Context, ui: &mut Ui) {
         let token = self.session.as_ref().map(|session| session.token.clone());
         if let Some(token) = token {
-            center_card(ui, 540.0, |ui| {
+            center_card(ui, 720.0, |ui| {
                 show_card(ui, |ui| {
-                    ScrollArea::vertical().max_height(420.0).show(ui, |ui| {
+                    header_row(ui, &token.label, false);
+                    ui.add_space(8.0);
+                    ScrollArea::vertical().max_height(560.0).show(ui, |ui| {
                         ui.horizontal(|ui| {
                             if ui.add(small_button("Домой")).clicked() {
                                 self.logout();
                             }
-                            ui.label(RichText::new(&token.label).strong());
                             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                                 if ui.add(outline_button("Обновить")).clicked() {
                                     self.read_objects();
@@ -516,7 +517,7 @@ impl TokenStudioApp {
 
     fn draw_background(&self, ui: &mut Ui) {
         let rect = ui.max_rect();
-        ui.painter().rect_filled(rect, 0.0, theme::BG_DARKEST);
+        ui.painter().rect_filled(rect, 0.0, Color32::TRANSPARENT);
     }
 
     fn draw_toasts(&mut self, ctx: &Context) {
@@ -542,8 +543,8 @@ impl TokenStudioApp {
                 .anchor(Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -16.0 - index as f32 * 62.0))
                 .show(ctx, |ui| {
                     Frame::new()
-                        .fill(Color32::from_rgba_premultiplied(18, 18, 18, (220.0 * alpha) as u8))
-                        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(color.r(), color.g(), color.b(), (100.0 * alpha) as u8)))
+                        .fill(Color32::from_rgba_premultiplied(252, 252, 252, (235.0 * alpha) as u8))
+                        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(color.r(), color.g(), color.b(), (40.0 * alpha) as u8)))
                         .corner_radius(CornerRadius::same(12))
                         .inner_margin(Margin::same(10))
                         .show(ui, |ui| {
@@ -587,9 +588,9 @@ fn show_card<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
             theme::PANEL.b(),
             242,
         ))
-        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(255, 255, 255, 28)))
-        .corner_radius(CornerRadius::same(16))
-        .inner_margin(Margin::same(16))
+        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(20, 20, 20, 18)))
+        .corner_radius(CornerRadius::same(28))
+        .inner_margin(Margin::same(20))
         .show(ui, add_contents)
         .inner
 }
@@ -614,15 +615,15 @@ fn list_button(text_selected: bool, text: &str) -> Button<'_> {
             .strong(),
     )
     .fill(if text_selected { theme::TURQUOISE } else { theme::PANEL })
-    .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(255, 255, 255, 32)))
+    .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(20, 20, 20, 22)))
     .corner_radius(CornerRadius::same(12))
     .min_size(Vec2::new(0.0, 34.0))
 }
 
 fn accent_button(text: &str) -> Button<'_> {
-    Button::new(RichText::new(text).strong().color(theme::BG_DARKEST))
+    Button::new(RichText::new(text).strong().color(theme::PANEL))
         .fill(theme::TURQUOISE)
-        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(255, 255, 255, 50)))
+        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(20, 20, 20, 50)))
         .corner_radius(CornerRadius::same(14))
         .min_size(Vec2::new(0.0, 38.0))
 }
@@ -630,7 +631,7 @@ fn accent_button(text: &str) -> Button<'_> {
 fn outline_button(text: &str) -> Button<'_> {
     Button::new(RichText::new(text).color(theme::TEXT))
         .fill(theme::PANEL)
-        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(255, 255, 255, 48)))
+        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(20, 20, 20, 48)))
         .corner_radius(CornerRadius::same(14))
         .min_size(Vec2::new(0.0, 38.0))
 }
@@ -638,9 +639,26 @@ fn outline_button(text: &str) -> Button<'_> {
 fn small_button(text: &str) -> Button<'_> {
     Button::new(RichText::new(text).color(theme::TEXT))
         .fill(theme::PANEL)
-        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(255, 255, 255, 48)))
+        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(20, 20, 20, 48)))
         .corner_radius(CornerRadius::same(12))
         .min_size(Vec2::new(64.0, 30.0))
+}
+
+fn header_row(ui: &mut Ui, title: &str, allow_close: bool) {
+    let response = ui
+        .horizontal(|ui| {
+        ui.label(RichText::new(title).text_style(egui::TextStyle::Heading));
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            if allow_close && ui.add(small_button("Закрыть")).clicked() {
+                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+            }
+        });
+    })
+        .response;
+
+    if response.drag_started() {
+        ui.ctx().send_viewport_cmd(egui::ViewportCommand::StartDrag);
+    }
 }
 
 impl Drop for TokenStudioApp {
