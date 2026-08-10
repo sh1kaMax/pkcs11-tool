@@ -1,4 +1,7 @@
-use egui::{epaint::Hsva, Color32, Context, CornerRadius, FontDefinitions, FontFamily, FontId, Stroke, Style, TextStyle, Visuals};
+use egui::{
+    epaint::Hsva, Color32, Context, CornerRadius, FontDefinitions, FontFamily, FontId, Stroke, Style, TextStyle,
+    Theme, Visuals,
+};
 
 pub const BG_DARKEST: Color32 = Color32::from_rgb(5, 14, 18);
 pub const BG_DARK: Color32 = Color32::from_rgb(10, 24, 31);
@@ -14,8 +17,9 @@ pub const TEXT_MUTED: Color32 = Color32::from_rgb(138, 175, 175);
 pub fn install(ctx: &Context) {
     let fonts = FontDefinitions::default();
     ctx.set_fonts(fonts);
+    ctx.set_theme(Theme::Dark);
 
-    let mut style: Style = (*ctx.style()).clone();
+    let mut style: Style = (*ctx.style_of(Theme::Dark)).clone();
     style.spacing.item_spacing = egui::vec2(12.0, 12.0);
     style.spacing.button_padding = egui::vec2(18.0, 12.0);
     style.visuals = visuals();
@@ -29,7 +33,8 @@ pub fn install(ctx: &Context) {
         (TextStyle::Monospace, FontId::new(14.0, FontFamily::Monospace)),
     ]
     .into();
-    ctx.set_style(style);
+    ctx.set_style_of(Theme::Dark, style.clone());
+    ctx.set_style_of(Theme::Light, style);
 }
 
 fn visuals() -> Visuals {
@@ -69,4 +74,3 @@ fn tint(color: Color32, value_mult: f32) -> Color32 {
         a: hsva.a,
     })
 }
-

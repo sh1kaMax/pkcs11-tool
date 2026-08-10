@@ -86,12 +86,6 @@ impl Pkcs11Service {
     }
 }
 
-impl Drop for Pkcs11Service {
-    fn drop(&mut self) {
-        let _ = self.context.finalize();
-    }
-}
-
 impl TokenSession {
     pub fn format(&self) -> Result<usize, ServiceError> {
         let objects = self.collect_object_handles(&[])?;

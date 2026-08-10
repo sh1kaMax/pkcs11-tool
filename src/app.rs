@@ -371,7 +371,7 @@ impl TokenStudioApp {
         });
 
         ui.add_space(20.0);
-        self.card(ui, |ui| {
+        show_card(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.vertical(|ui| {
                     ui.label(RichText::new("PKCS#11 модуль").text_style(egui::TextStyle::Name("Section".into())));
@@ -390,7 +390,7 @@ impl TokenStudioApp {
 
         ui.add_space(18.0);
         ui.columns(2, |columns| {
-            self.card(&mut columns[0], |ui| {
+            show_card(&mut columns[0], |ui| {
                 ui.horizontal(|ui| {
                     ui.label(RichText::new("Подключенные токены").text_style(egui::TextStyle::Name("Section".into())));
                     ui.label(RichText::new(format!("{} шт.", self.tokens.len())).color(theme::TURQUOISE_SOFT));
@@ -430,7 +430,7 @@ impl TokenStudioApp {
                 }
             });
 
-            self.card(&mut columns[1], |ui| {
+            show_card(&mut columns[1], |ui| {
                 ui.label(RichText::new("Вход в токен").text_style(egui::TextStyle::Name("Section".into())));
                 ui.label(RichText::new("Сначала выбирается токен, затем выполняется вход пользователя.").color(theme::TEXT_MUTED));
                 ui.add_space(16.0);
@@ -461,7 +461,7 @@ impl TokenStudioApp {
     fn ui_dashboard(&mut self, ctx: &Context, ui: &mut Ui) {
         let token = self.session.as_ref().map(|session| session.token.clone());
         if let Some(token) = token {
-            self.card(ui, |ui| {
+            show_card(ui, |ui| {
                 ui.horizontal(|ui| {
                     ui.vertical(|ui| {
                         ui.label(RichText::new("Командный центр").text_style(egui::TextStyle::Name("Hero".into())));
@@ -487,7 +487,7 @@ impl TokenStudioApp {
             ui.add_space(18.0);
             ui.columns(2, |columns| {
                 columns[0].set_width(270.0);
-                self.card(&mut columns[0], |ui| {
+                show_card(&mut columns[0], |ui| {
                     ui.label(RichText::new("Операции").text_style(egui::TextStyle::Name("Section".into())));
                     ui.label(RichText::new("Сначала выберите команду, затем заполните только нужные поля.").color(theme::TEXT_MUTED));
                     ui.add_space(10.0);
@@ -514,7 +514,7 @@ impl TokenStudioApp {
                     }
                 });
 
-                self.card(&mut columns[1], |ui| {
+                show_card(&mut columns[1], |ui| {
                     ui.label(RichText::new(self.active_tab.title()).text_style(egui::TextStyle::Name("Section".into())));
                     ui.label(RichText::new(self.active_tab.description()).color(theme::TEXT_MUTED));
                     ui.add_space(18.0);
@@ -620,19 +620,15 @@ impl TokenStudioApp {
         }
     }
 
-    fn draw_background(&self, ctx: &Context) {
-        CentralPanel::default()
-            .frame(Frame::new().fill(theme::BG_DARKEST))
-            .show(ctx, |ui| {
-                let rect = ui.max_rect();
-                let painter = ui.painter();
-                painter.rect_filled(rect, 0.0, theme::BG_DARKEST);
+    fn draw_background(&self, ui: &mut Ui) {
+        let rect = ui.max_rect();
+        let painter = ui.painter();
+        painter.rect_filled(rect, 0.0, theme::BG_DARKEST);
 
-                let top = rect.left_top() + egui::vec2(180.0, 120.0);
-                let bottom = rect.right_bottom() - egui::vec2(220.0, 140.0);
-                painter.circle_filled(top, 220.0, Color32::from_rgba_premultiplied(34, 219, 196, 18));
-                painter.circle_filled(bottom, 280.0, Color32::from_rgba_premultiplied(13, 91, 112, 26));
-            });
+        let top = rect.left_top() + egui::vec2(180.0, 120.0);
+        let bottom = rect.right_bottom() - egui::vec2(220.0, 140.0);
+        painter.circle_filled(top, 220.0, Color32::from_rgba_premultiplied(34, 219, 196, 18));
+        painter.circle_filled(bottom, 280.0, Color32::from_rgba_premultiplied(13, 91, 112, 26));
     }
 
     fn draw_toasts(&mut self, ctx: &Context) {
@@ -677,38 +673,39 @@ impl TokenStudioApp {
         }
     }
 
-    fn card<R>(&self, ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
-        Frame::new()
-            .fill(Color32::from_rgba_premultiplied(
-                theme::PANEL.r(),
-                theme::PANEL.g(),
-                theme::PANEL.b(),
-                242,
-            ))
-            .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(34, 219, 196, 34)))
-            .corner_radius(CornerRadius::same(24))
-            .inner_margin(Margin::same(20))
-            .show(ui, add_contents)
-            .inner
-    }
 }
 
 impl eframe::App for TokenStudioApp {
-    fn update(&mut self, ctx: &Context, _frame: &mut eframe::Frame) {
-        self.draw_background(ctx);
+    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+        self.draw_background(ui);
 
-        CentralPanel::default()
-            .frame(Frame::new().fill(Color32::TRANSPARENT).inner_margin(Margin::same(18)))
-            .show(ctx, |ui| {
-                if self.session.is_some() {
-                    self.ui_dashboard(ctx, ui);
-                } else {
-                    self.ui_login(ctx, ui);
-                }
-            });
+        let ctx = ui.ctx().clone();
+        ui.scope(|ui| {
+            ui.set_width(ui.available_width());
+            if self.session.is_some() {
+                self.ui_dashboard(&ctx, ui);
+            } else {
+                self.ui_login(&ctx, ui);
+            }
+        });
 
-        self.draw_toasts(ctx);
+        self.draw_toasts(&ctx);
     }
+}
+
+fn show_card<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
+    Frame::new()
+        .fill(Color32::from_rgba_premultiplied(
+            theme::PANEL.r(),
+            theme::PANEL.g(),
+            theme::PANEL.b(),
+            242,
+        ))
+        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(34, 219, 196, 34)))
+        .corner_radius(CornerRadius::same(24))
+        .inner_margin(Margin::same(20))
+        .show(ui, add_contents)
+        .inner
 }
 
 fn accent_button(text: &str) -> Button<'_> {
