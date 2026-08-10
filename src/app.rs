@@ -1,17 +1,16 @@
 use std::{
     path::PathBuf,
-    time::{Duration, Instant},
 };
 
 use chrono::Local;
 use eframe::egui::{
-    self, Align, Align2, Area, Button, CollapsingHeader, Color32, Context, CornerRadius, Frame, Id, Layout, Margin,
-    RichText, ScrollArea, Stroke, TextEdit, Ui, Vec2,
+    self, Align, Button, CollapsingHeader, Color32, Context, CornerRadius, Frame, Layout, Margin, RichText,
+    ScrollArea, Stroke, TextEdit, Ui, Vec2,
 };
 use rfd::FileDialog;
 
 use crate::{
-    pkcs11::{default_module_path, Pkcs11Service, ServiceError, TokenObjectInfo, TokenSession, TokenSummary},
+    pkcs11::{default_module_path, Pkcs11Service, TokenObjectInfo, TokenSession, TokenSummary},
     theme,
 };
 
@@ -35,22 +34,6 @@ impl CommandTab {
         }
     }
 
-}
-
-#[derive(Clone, Copy)]
-enum ToastKind {
-    Success,
-    Error,
-    Info,
-}
-
-struct Toast {
-    id: u64,
-    title: String,
-    body: String,
-    kind: ToastKind,
-    created_at: Instant,
-    ttl: Duration,
 }
 
 struct LoginForm {
@@ -85,10 +68,13 @@ pub struct TokenStudioApp {
     change_pin_form: ChangePinForm,
     write_form: WriteForm,
     read_form: ReadForm,
-    toasts: Vec<Toast>,
-    next_toast_id: u64,
     loading: bool,
     last_refresh_label: String,
+    login_error: Option<String>,
+    format_error: Option<String>,
+    change_pin_error: Option<String>,
+    write_error: Option<String>,
+    read_error: Option<String>,
 }
 
 impl TokenStudioApp {
@@ -118,10 +104,13 @@ impl TokenStudioApp {
                 selected_index: None,
                 target_path: String::new(),
             },
-            toasts: Vec::new(),
-            next_toast_id: 1,
             loading: false,
             last_refresh_label: String::from("Токены еще не запрашивались"),
+            login_error: None,
+            format_error: None,
+            change_pin_error: None,
+            write_error: None,
+            read_error: None,
         };
         app.refresh_tokens();
         app
@@ -138,12 +127,12 @@ impl TokenStudioApp {
                 self.tokens = tokens;
                 self.login_form.selected_index = 0;
                 self.last_refresh_label = format!("Обновлено {}", Local::now().format("%H:%M:%S"));
-                self.push_toast(ToastKind::Success, "Список токенов обновлен", "Подключенные устройства успешно прочитаны.");
+                self.login_error = None;
             }
             Err(error) => {
                 self.service = None;
                 self.tokens.clear();
-                self.push_error("Не удалось прочитать токены", error);
+                self.login_error = Some(format!("Не удалось прочитать токены: {error}"));
             }
         }
         self.loading = false;
@@ -151,15 +140,15 @@ impl TokenStudioApp {
 
     fn login(&mut self) {
         let Some(service) = self.service.as_ref() else {
-            self.push_toast(ToastKind::Error, "Нет PKCS#11-сервиса", "Сначала укажите корректный путь к PKCS#11-модулю.");
+            self.login_error = Some(String::from("Нет PKCS#11-сервиса"));
             return;
         };
         let Some(token) = self.tokens.get(self.login_form.selected_index).cloned() else {
-            self.push_toast(ToastKind::Error, "Токен не выбран", "Подключите Рутокен и обновите список.");
+            self.login_error = Some(String::from("Токен не выбран"));
             return;
         };
         if self.login_form.pin.is_empty() {
-            self.push_toast(ToastKind::Error, "Пустой PIN", "Введите PIN пользователя для входа в токен.");
+            self.login_error = Some(String::from("Введите PIN"));
             return;
         }
 
@@ -168,20 +157,15 @@ impl TokenStudioApp {
                 self.session = Some(session);
                 self.change_pin_form.old_pin = self.login_form.pin.clone();
                 self.read_objects();
-                self.push_toast(
-                    ToastKind::Success,
-                    "Вход выполнен",
-                    &format!("Активная сессия открыта для токена {}", token.label),
-                );
+                self.login_error = None;
             }
-            Err(error) => self.push_error("Не удалось выполнить вход", error),
+            Err(error) => self.login_error = Some(format!("Не удалось выполнить вход: {error}")),
         }
     }
 
     fn logout(&mut self) {
         if let Some(session) = self.session.take() {
             session.logout();
-            self.push_toast(ToastKind::Info, "Сессия завершена", "Пользователь вышел из токена, ресурсы освобождены.");
         }
         self.login_form.pin.clear();
         self.change_pin_form = ChangePinForm {
@@ -200,6 +184,7 @@ impl TokenStudioApp {
         };
         self.close_service();
         self.refresh_tokens();
+        self.clear_action_errors();
     }
 
     fn close_service(&mut self) {
@@ -211,7 +196,7 @@ impl TokenStudioApp {
     fn format_token(&mut self) {
         let result = {
             let Some(session) = self.session.as_ref() else {
-                self.push_toast(ToastKind::Error, "Нет активной сессии", "Сначала войдите в токен.");
+                self.format_error = Some(String::from("Сначала войдите в токен"));
                 return;
             };
             session.format()
@@ -220,13 +205,9 @@ impl TokenStudioApp {
         match result {
             Ok(removed) => {
                 self.read_objects();
-                self.push_toast(
-                    ToastKind::Success,
-                    "Форматирование завершено",
-                    &format!("Удалено объектов: {removed}"),
-                );
+                self.format_error = Some(format!("Готово. Удалено объектов: {removed}"));
             }
-            Err(error) => self.push_error("Не удалось очистить токен", error),
+            Err(error) => self.format_error = Some(format!("Не удалось очистить токен: {error}")),
         }
     }
 
@@ -235,11 +216,11 @@ impl TokenStudioApp {
             || self.change_pin_form.new_pin.is_empty()
             || self.change_pin_form.repeat_pin.is_empty()
         {
-            self.push_toast(ToastKind::Error, "Не все поля заполнены", "Для смены PIN нужно заполнить старый и новый PIN.");
+            self.change_pin_error = Some(String::from("Заполните все поля"));
             return;
         }
         if self.change_pin_form.new_pin != self.change_pin_form.repeat_pin {
-            self.push_toast(ToastKind::Error, "PIN не совпадает", "Повтор нового PIN отличается от введенного значения.");
+            self.change_pin_error = Some(String::from("PIN не совпадает"));
             return;
         }
 
@@ -247,7 +228,7 @@ impl TokenStudioApp {
         let new_pin = self.change_pin_form.new_pin.clone();
         let result = {
             let Some(session) = self.session.as_ref() else {
-                self.push_toast(ToastKind::Error, "Нет активной сессии", "Сначала войдите в токен.");
+                self.change_pin_error = Some(String::from("Сначала войдите в токен"));
                 return;
             };
             session.change_pin(&old_pin, &new_pin)
@@ -259,15 +240,15 @@ impl TokenStudioApp {
                 self.change_pin_form.old_pin = new_pin;
                 self.change_pin_form.new_pin.clear();
                 self.change_pin_form.repeat_pin.clear();
-                self.push_toast(ToastKind::Success, "PIN изменен", "Новый PIN записан в токен.");
+                self.change_pin_error = Some(String::from("PIN изменен"));
             }
-            Err(error) => self.push_error("Не удалось изменить PIN", error),
+            Err(error) => self.change_pin_error = Some(format!("Не удалось изменить PIN: {error}")),
         }
     }
 
     fn write_to_token(&mut self) {
         if self.write_form.label.trim().is_empty() || self.write_form.file_path.trim().is_empty() {
-            self.push_toast(ToastKind::Error, "Не хватает данных", "Укажите название объекта и выберите файл для записи.");
+            self.write_error = Some(String::from("Укажите название и файл"));
             return;
         }
 
@@ -275,7 +256,7 @@ impl TokenStudioApp {
         let path = PathBuf::from(self.write_form.file_path.trim());
         let result = {
             let Some(session) = self.session.as_ref() else {
-                self.push_toast(ToastKind::Error, "Нет активной сессии", "Сначала войдите в токен.");
+                self.write_error = Some(String::from("Сначала войдите в токен"));
                 return;
             };
             session.write_file(&label, &path)
@@ -284,9 +265,9 @@ impl TokenStudioApp {
         match result {
             Ok(()) => {
                 self.read_objects();
-                self.push_toast(ToastKind::Success, "Файл записан", "Новый объект успешно создан на токене.");
+                self.write_error = Some(String::from("Файл записан"));
             }
-            Err(error) => self.push_error("Не удалось записать данные", error),
+            Err(error) => self.write_error = Some(format!("Не удалось записать данные: {error}")),
         }
     }
 
@@ -302,57 +283,50 @@ impl TokenStudioApp {
             Ok(objects) => {
                 self.read_form.objects = objects;
                 self.read_form.selected_index = None;
+                self.read_error = None;
             }
-            Err(error) => self.push_error("Не удалось прочитать список объектов", error),
+            Err(error) => self.read_error = Some(format!("Не удалось прочитать список объектов: {error}")),
         }
     }
 
     fn export_selected_object(&mut self) {
         let Some(index) = self.read_form.selected_index else {
-            self.push_toast(ToastKind::Error, "Объект не выбран", "Выберите объект в списке для чтения.");
+            self.read_error = Some(String::from("Выберите объект"));
             return;
         };
         if self.read_form.target_path.trim().is_empty() {
-            self.push_toast(ToastKind::Error, "Путь не выбран", "Укажите файл, в который нужно выгрузить данные.");
+            self.read_error = Some(String::from("Укажите файл назначения"));
             return;
         }
         let Some(object) = self.read_form.objects.get(index).cloned() else {
-            self.push_toast(ToastKind::Error, "Объект не найден", "Список объектов устарел, перечитайте токен.");
+            self.read_error = Some(String::from("Объект не найден"));
             return;
         };
         let output_path = PathBuf::from(self.read_form.target_path.trim());
         let result = {
             let Some(session) = self.session.as_ref() else {
-                self.push_toast(ToastKind::Error, "Нет активной сессии", "Сначала войдите в токен.");
+                self.read_error = Some(String::from("Сначала войдите в токен"));
                 return;
             };
             session.export_object(object.handle, &output_path)
         };
 
         match result {
-            Ok(()) => self.push_toast(ToastKind::Success, "Данные выгружены", "Выбранный объект записан в указанный файл."),
-            Err(error) => self.push_error("Не удалось выгрузить объект", error),
+            Ok(()) => self.read_error = Some(String::from("Данные выгружены")),
+            Err(error) => self.read_error = Some(format!("Не удалось выгрузить объект: {error}")),
         }
     }
 
-    fn push_error(&mut self, title: &str, error: ServiceError) {
-        self.push_toast(ToastKind::Error, title, &error.to_string());
-    }
-
-    fn push_toast(&mut self, kind: ToastKind, title: &str, body: &str) {
-        self.toasts.push(Toast {
-            id: self.next_toast_id,
-            title: title.to_owned(),
-            body: body.to_owned(),
-            kind,
-            created_at: Instant::now(),
-            ttl: Duration::from_secs(4),
-        });
-        self.next_toast_id += 1;
+    fn clear_action_errors(&mut self) {
+        self.login_error = None;
+        self.format_error = None;
+        self.change_pin_error = None;
+        self.write_error = None;
+        self.read_error = None;
     }
 
     fn ui_login(&mut self, _ctx: &Context, ui: &mut Ui) {
-        center_card(ui, 560.0, |ui| {
+        center_card(ui, 620.0, 430.0, |ui| {
             show_card(ui, |ui| {
                 header_row(ui, "Вход", true);
                 ui.add_space(8.0);
@@ -390,6 +364,10 @@ impl TokenStudioApp {
                 });
                 ui.add_space(8.0);
                 ui.label(RichText::new(&self.last_refresh_label).color(theme::TEXT_MUTED));
+                if let Some(message) = &self.login_error {
+                    ui.add_space(8.0);
+                    ui.label(RichText::new(message).color(theme::TEXT_MUTED));
+                }
             });
         });
     }
@@ -397,7 +375,7 @@ impl TokenStudioApp {
     fn ui_dashboard(&mut self, ctx: &Context, ui: &mut Ui) {
         let token = self.session.as_ref().map(|session| session.token.clone());
         if let Some(token) = token {
-            center_card(ui, 720.0, |ui| {
+            center_card(ui, 820.0, 650.0, |ui| {
                 show_card(ui, |ui| {
                     header_row(ui, &token.label, false);
                     ui.add_space(8.0);
@@ -444,6 +422,10 @@ impl TokenStudioApp {
         if ui.add(accent_button("Выполнить")).clicked() {
             self.format_token();
         }
+        if let Some(message) = &self.format_error {
+            ui.add_space(8.0);
+            ui.label(RichText::new(message).color(theme::TEXT_MUTED));
+        }
     }
 
     fn ui_change_pin(&mut self, ui: &mut Ui) {
@@ -453,6 +435,10 @@ impl TokenStudioApp {
         ui.add_space(10.0);
         if ui.add(accent_button("Выполнить")).clicked() {
             self.change_pin();
+        }
+        if let Some(message) = &self.change_pin_error {
+            ui.add_space(8.0);
+            ui.label(RichText::new(message).color(theme::TEXT_MUTED));
         }
     }
 
@@ -473,6 +459,10 @@ impl TokenStudioApp {
         ui.add_space(10.0);
         if ui.add(accent_button("Выполнить")).clicked() {
             self.write_to_token();
+        }
+        if let Some(message) = &self.write_error {
+            ui.add_space(8.0);
+            ui.label(RichText::new(message).color(theme::TEXT_MUTED));
         }
     }
 
@@ -513,51 +503,15 @@ impl TokenStudioApp {
                 self.read_objects();
             }
         });
+        if let Some(message) = &self.read_error {
+            ui.add_space(8.0);
+            ui.label(RichText::new(message).color(theme::TEXT_MUTED));
+        }
     }
 
     fn draw_background(&self, ui: &mut Ui) {
         let rect = ui.max_rect();
         ui.painter().rect_filled(rect, 0.0, Color32::TRANSPARENT);
-    }
-
-    fn draw_toasts(&mut self, ctx: &Context) {
-        let now = Instant::now();
-        self.toasts.retain(|toast| now.duration_since(toast.created_at) < toast.ttl);
-
-        for (index, toast) in self.toasts.iter().enumerate() {
-            let age = now.duration_since(toast.created_at);
-            let alpha = if age > toast.ttl.saturating_sub(Duration::from_millis(700)) {
-                1.0 - ((age - (toast.ttl - Duration::from_millis(700))).as_secs_f32() / 0.7)
-            } else {
-                1.0
-            }
-            .clamp(0.0, 1.0);
-
-            let color = match toast.kind {
-                ToastKind::Success => theme::TEXT,
-                ToastKind::Error => theme::TEXT,
-                ToastKind::Info => theme::TEXT_MUTED,
-            };
-
-            Area::new(Id::new(("toast", toast.id)))
-                .anchor(Align2::RIGHT_BOTTOM, egui::vec2(-16.0, -16.0 - index as f32 * 62.0))
-                .show(ctx, |ui| {
-                    Frame::new()
-                        .fill(Color32::from_rgba_premultiplied(252, 252, 252, (235.0 * alpha) as u8))
-                        .stroke(Stroke::new(1.0, Color32::from_rgba_premultiplied(color.r(), color.g(), color.b(), (40.0 * alpha) as u8)))
-                        .corner_radius(CornerRadius::same(12))
-                        .inner_margin(Margin::same(10))
-                        .show(ui, |ui| {
-                            ui.set_width(220.0);
-                            ui.horizontal(|ui| {
-                                ui.vertical(|ui| {
-                                    ui.label(RichText::new(&toast.title).strong().size(13.0));
-                                    ui.label(RichText::new(&toast.body).color(theme::TEXT_MUTED).size(11.0));
-                                });
-                            });
-                        });
-                });
-        }
     }
 
 }
@@ -575,8 +529,6 @@ impl eframe::App for TokenStudioApp {
                 self.ui_login(&ctx, ui);
             }
         });
-
-        self.draw_toasts(&ctx);
     }
 }
 
@@ -595,7 +547,9 @@ fn show_card<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
         .inner
 }
 
-fn center_card<R>(ui: &mut Ui, width: f32, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
+fn center_card<R>(ui: &mut Ui, width: f32, height: f32, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
+    let top = ((ui.available_height() - height) * 0.5).max(0.0);
+    ui.add_space(top);
     ui.horizontal(|ui| {
         let side = ((ui.available_width() - width) * 0.5).max(0.0);
         ui.add_space(side);
@@ -611,7 +565,7 @@ fn center_card<R>(ui: &mut Ui, width: f32, add_contents: impl FnOnce(&mut Ui) ->
 fn list_button(text_selected: bool, text: &str) -> Button<'_> {
     Button::new(
         RichText::new(text)
-            .color(if text_selected { theme::BG_DARKEST } else { theme::TEXT })
+            .color(if text_selected { theme::PANEL } else { theme::TEXT })
             .strong(),
     )
     .fill(if text_selected { theme::TURQUOISE } else { theme::PANEL })
@@ -647,13 +601,13 @@ fn small_button(text: &str) -> Button<'_> {
 fn header_row(ui: &mut Ui, title: &str, allow_close: bool) {
     let response = ui
         .horizontal(|ui| {
-        ui.label(RichText::new(title).text_style(egui::TextStyle::Heading));
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            if allow_close && ui.add(small_button("Закрыть")).clicked() {
-                ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
-            }
-        });
-    })
+            ui.label(RichText::new(title).text_style(egui::TextStyle::Heading));
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                if allow_close && ui.add(small_button("Закрыть")).clicked() {
+                    ui.ctx().send_viewport_cmd(egui::ViewportCommand::Close);
+                }
+            });
+        })
         .response;
 
     if response.drag_started() {
