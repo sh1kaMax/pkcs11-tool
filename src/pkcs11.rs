@@ -78,7 +78,10 @@ impl Pkcs11Service {
 
     pub fn login(&self, token: TokenSummary, pin: &str) -> Result<TokenSession, ServiceError> {
         let session = self.context.open_rw_session(token.slot)?;
-        session.login(UserType::User, Some(&AuthPin::new(pin.to_owned())))?;
+        session.login(
+            UserType::User,
+            Some(&AuthPin::new(pin.to_owned().into_boxed_str())),
+        )?;
         Ok(TokenSession { token, session })
     }
 }
@@ -102,8 +105,10 @@ impl TokenSession {
     }
 
     pub fn change_pin(&self, old_pin: &str, new_pin: &str) -> Result<(), ServiceError> {
-        self.session
-            .set_pin(&AuthPin::new(old_pin.to_owned()), &AuthPin::new(new_pin.to_owned()))?;
+        self.session.set_pin(
+            &AuthPin::new(old_pin.to_owned().into_boxed_str()),
+            &AuthPin::new(new_pin.to_owned().into_boxed_str()),
+        )?;
         Ok(())
     }
 
