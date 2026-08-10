@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use cryptoki::{
-    context::{CInitializeArgs, Pkcs11},
+    context::{CInitializeArgs, CInitializeFlags, Pkcs11},
     error::Error as CryptokiError,
     object::{Attribute, AttributeType, ObjectClass, ObjectHandle},
     session::{Session, UserType},
@@ -56,7 +56,7 @@ impl Pkcs11Service {
         }
 
         let context = Pkcs11::new(module_path.as_path())?;
-        context.initialize(CInitializeArgs::OsThreads)?;
+        context.initialize(CInitializeArgs::new(CInitializeFlags::OS_LOCKING_OK))?;
 
         Ok(Self { context })
     }
@@ -91,7 +91,7 @@ impl Drop for Pkcs11Service {
 
 impl TokenSession {
     pub fn format(&self) -> Result<usize, ServiceError> {
-        let objects = self.session.find_objects(&[])?;
+        let objects = self.collect_object_handles(&[])?;
         let mut removed = 0usize;
         for handle in objects {
             if self.session.destroy_object(handle).is_ok() {
@@ -132,9 +132,7 @@ impl TokenSession {
     }
 
     pub fn list_objects(&self) -> Result<Vec<TokenObjectInfo>, ServiceError> {
-        let handles = self
-            .session
-            .find_objects(&[Attribute::Class(ObjectClass::DATA)])?;
+        let handles = self.collect_object_handles(&[Attribute::Class(ObjectClass::DATA)])?;
 
         let mut objects = Vec::new();
         for handle in handles {
@@ -187,6 +185,16 @@ impl TokenSession {
 
     pub fn logout(&self) {
         let _ = self.session.logout();
+    }
+}
+
+impl TokenSession {
+    fn collect_object_handles(&self, template: &[Attribute]) -> Result<Vec<ObjectHandle>, ServiceError> {
+        let mut handles = Vec::new();
+        for object in self.session.iter_objects(template)? {
+            handles.push(object?);
+        }
+        Ok(handles)
     }
 }
 
