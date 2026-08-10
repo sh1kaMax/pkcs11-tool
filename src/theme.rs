@@ -1,7 +1,7 @@
 use egui::{Color32, Context, CornerRadius, FontDefinitions, FontFamily, FontId, Stroke, Style, TextStyle, Theme, Visuals};
 
-pub const BG_DARKEST: Color32 = Color32::from_rgb(255, 255, 255);
-pub const BG_DARK: Color32 = Color32::from_rgb(255, 255, 255);
+pub const BG_DARKEST: Color32 = Color32::from_rgba_premultiplied(0, 0, 0, 0);
+pub const BG_DARK: Color32 = Color32::from_rgba_premultiplied(0, 0, 0, 0);
 pub const PANEL: Color32 = Color32::from_rgba_premultiplied(252, 252, 252, 248);
 pub const PANEL_ALT: Color32 = Color32::from_rgba_premultiplied(240, 240, 240, 252);
 pub const TURQUOISE: Color32 = Color32::from_rgb(20, 20, 20);

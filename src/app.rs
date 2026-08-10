@@ -327,7 +327,7 @@ impl TokenStudioApp {
     }
 
     fn ui_login(&mut self, _ctx: &Context, ui: &mut Ui) {
-        center_card(ui, 660.0, 460.0, |ui| {
+        screen_card(ui, |ui| {
             show_card(ui, |ui| {
                 header_row(ui, "Вход", true);
                 ui.add_space(8.0);
@@ -376,11 +376,11 @@ impl TokenStudioApp {
     fn ui_dashboard(&mut self, ctx: &Context, ui: &mut Ui) {
         let token = self.session.as_ref().map(|session| session.token.clone());
         if let Some(token) = token {
-            center_card(ui, 880.0, 720.0, |ui| {
+            screen_card(ui, |ui| {
                 show_card(ui, |ui| {
                     header_row(ui, &token.label, false);
                     ui.add_space(8.0);
-                    ScrollArea::vertical().max_height(630.0).show(ui, |ui| {
+                    ScrollArea::vertical().show(ui, |ui| {
                         ui.horizontal(|ui| {
                             if ui.add(small_button("Домой")).clicked() {
                                 self.logout();
@@ -512,7 +512,7 @@ impl TokenStudioApp {
 
     fn draw_background(&self, ui: &mut Ui) {
         let rect = ui.max_rect();
-        ui.painter().rect_filled(rect, 0.0, Color32::WHITE);
+        ui.painter().rect_filled(rect, 0.0, Color32::TRANSPARENT);
     }
 
 }
@@ -548,14 +548,15 @@ fn show_card<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
         .inner
 }
 
-fn center_card<R>(ui: &mut Ui, width: f32, height: f32, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
-    let top = ((ui.available_height() - height) * 0.5).max(0.0);
-    ui.add_space(top);
+fn screen_card<R>(ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
+    ui.add_space(8.0);
     ui.horizontal(|ui| {
-        let side = ((ui.available_width() - width) * 0.5).max(0.0);
-        ui.add_space(side);
+        ui.add_space(8.0);
+        let width = (ui.available_width() - 8.0).max(0.0);
+        let height = (ui.available_height() - 8.0).max(0.0);
         ui.vertical(|ui| {
-            ui.set_width(width);
+            ui.set_width(width.max(0.0));
+            ui.set_min_height(height.max(0.0));
             add_contents(ui)
         })
         .inner
