@@ -208,12 +208,15 @@ impl TokenStudioApp {
     }
 
     fn format_token(&mut self) {
-        let Some(session) = self.session.as_ref() else {
-            self.push_toast(ToastKind::Error, "Нет активной сессии", "Сначала войдите в токен.");
-            return;
+        let result = {
+            let Some(session) = self.session.as_ref() else {
+                self.push_toast(ToastKind::Error, "Нет активной сессии", "Сначала войдите в токен.");
+                return;
+            };
+            session.format()
         };
 
-        match session.format() {
+        match result {
             Ok(removed) => {
                 self.read_objects();
                 self.push_toast(
@@ -227,10 +230,6 @@ impl TokenStudioApp {
     }
 
     fn change_pin(&mut self) {
-        let Some(session) = self.session.as_ref() else {
-            self.push_toast(ToastKind::Error, "Нет активной сессии", "Сначала войдите в токен.");
-            return;
-        };
         if self.change_pin_form.old_pin.is_empty()
             || self.change_pin_form.new_pin.is_empty()
             || self.change_pin_form.repeat_pin.is_empty()
@@ -243,10 +242,20 @@ impl TokenStudioApp {
             return;
         }
 
-        match session.change_pin(&self.change_pin_form.old_pin, &self.change_pin_form.new_pin) {
+        let old_pin = self.change_pin_form.old_pin.clone();
+        let new_pin = self.change_pin_form.new_pin.clone();
+        let result = {
+            let Some(session) = self.session.as_ref() else {
+                self.push_toast(ToastKind::Error, "Нет активной сессии", "Сначала войдите в токен.");
+                return;
+            };
+            session.change_pin(&old_pin, &new_pin)
+        };
+
+        match result {
             Ok(()) => {
-                self.login_form.pin = self.change_pin_form.new_pin.clone();
-                self.change_pin_form.old_pin = self.change_pin_form.new_pin.clone();
+                self.login_form.pin = new_pin.clone();
+                self.change_pin_form.old_pin = new_pin;
                 self.change_pin_form.new_pin.clear();
                 self.change_pin_form.repeat_pin.clear();
                 self.push_toast(ToastKind::Success, "PIN изменен", "Новый PIN записан в токен.");
@@ -256,17 +265,22 @@ impl TokenStudioApp {
     }
 
     fn write_to_token(&mut self) {
-        let Some(session) = self.session.as_ref() else {
-            self.push_toast(ToastKind::Error, "Нет активной сессии", "Сначала войдите в токен.");
-            return;
-        };
         if self.write_form.label.trim().is_empty() || self.write_form.file_path.trim().is_empty() {
             self.push_toast(ToastKind::Error, "Не хватает данных", "Укажите название объекта и выберите файл для записи.");
             return;
         }
 
+        let label = self.write_form.label.trim().to_owned();
         let path = PathBuf::from(self.write_form.file_path.trim());
-        match session.write_file(self.write_form.label.trim(), &path) {
+        let result = {
+            let Some(session) = self.session.as_ref() else {
+                self.push_toast(ToastKind::Error, "Нет активной сессии", "Сначала войдите в токен.");
+                return;
+            };
+            session.write_file(&label, &path)
+        };
+
+        match result {
             Ok(()) => {
                 self.read_objects();
                 self.push_toast(ToastKind::Success, "Файл записан", "Новый объект успешно создан на токене.");
@@ -276,10 +290,14 @@ impl TokenStudioApp {
     }
 
     fn read_objects(&mut self) {
-        let Some(session) = self.session.as_ref() else {
-            return;
+        let result = {
+            let Some(session) = self.session.as_ref() else {
+                return;
+            };
+            session.list_objects()
         };
-        match session.list_objects() {
+
+        match result {
             Ok(objects) => {
                 self.read_form.objects = objects;
                 self.read_form.selected_index = None;
@@ -289,10 +307,6 @@ impl TokenStudioApp {
     }
 
     fn export_selected_object(&mut self) {
-        let Some(session) = self.session.as_ref() else {
-            self.push_toast(ToastKind::Error, "Нет активной сессии", "Сначала войдите в токен.");
-            return;
-        };
         let Some(index) = self.read_form.selected_index else {
             self.push_toast(ToastKind::Error, "Объект не выбран", "Выберите объект в списке для чтения.");
             return;
@@ -301,12 +315,20 @@ impl TokenStudioApp {
             self.push_toast(ToastKind::Error, "Путь не выбран", "Укажите файл, в который нужно выгрузить данные.");
             return;
         }
-        let Some(object) = self.read_form.objects.get(index) else {
+        let Some(object) = self.read_form.objects.get(index).cloned() else {
             self.push_toast(ToastKind::Error, "Объект не найден", "Список объектов устарел, перечитайте токен.");
             return;
         };
+        let output_path = PathBuf::from(self.read_form.target_path.trim());
+        let result = {
+            let Some(session) = self.session.as_ref() else {
+                self.push_toast(ToastKind::Error, "Нет активной сессии", "Сначала войдите в токен.");
+                return;
+            };
+            session.export_object(object.handle, &output_path)
+        };
 
-        match session.export_object(object.handle, &PathBuf::from(self.read_form.target_path.trim())) {
+        match result {
             Ok(()) => self.push_toast(ToastKind::Success, "Данные выгружены", "Выбранный объект записан в указанный файл."),
             Err(error) => self.push_error("Не удалось выгрузить объект", error),
         }

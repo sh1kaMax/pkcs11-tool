@@ -36,3 +36,12 @@ jobs:
 
       - name: Build release
         run: cargo build --release
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: pkcs11-token-studio-${{ matrix.os }}
+          path: |
+            target/release/pkcs11-tool
+            target/release/pkcs11-tool.exe
+          if-no-files-found: error
